@@ -23,31 +23,38 @@ def parse_post_link(link: str):
     msg_id = int(parts[-1])
     return chat, msg_id
 
-#━━━━━━━━━━━━━━━━━━━━ JOIN REQUEST AUTO APPROVE ━━━━━━━━━━━━━━━━━━━━
+#━━━━━━━━━━━━━━━━━━━━ JOIN REQUEST (NO APPROVE, ONLY DM) ━━━━━━━━━━━━━━━━━━━━
 @app.on_chat_join_request(filters.group | filters.channel)
 async def approve(_, m: Message):
     op = m.chat
     user = m.from_user
     try:
         add_group(op.id)
-        await app.approve_chat_join_request(op.id, user.id)
         add_user(user.id)
 
+        # ❌ JOIN REQUEST APPROVE NAHI HOGA
+        # await app.approve_chat_join_request(op.id, user.id)
+
+        # ✅ USER KO DM
         await app.send_message(
             user.id,
-            f"👋 Welcome • {user.first_name}\n\n"
-            "💸 Join request approved ✅\n\n"
-            "APK aur setup niche hai 👇"
+            f"👋 Hello • {user.first_name}\n\n"
+            "❌ Aapka join request approve nahi hua.\n"
+            "📩 Lekin important info DM me bhej di gayi hai 👇"
         )
 
+        # ✅ PROMO / APK / VIDEO SEND
         for link in cfg.POSTS:
-            chat_id, msg_id = parse_post_link(link)
-            await app.copy_message(
-                chat_id=user.id,
-                from_chat_id=chat_id,
-                message_id=msg_id
-            )
-            await asyncio.sleep(1)
+            try:
+                chat_id, msg_id = parse_post_link(link)
+                await app.copy_message(
+                    chat_id=user.id,
+                    from_chat_id=chat_id,
+                    message_id=msg_id
+                )
+                await asyncio.sleep(1)
+            except:
+                pass
 
     except errors.PeerIdInvalid:
         pass
@@ -68,13 +75,16 @@ async def start(_, m: Message):
         )
 
         for link in cfg.POSTS:
-            chat_id, msg_id = parse_post_link(link)
-            await app.copy_message(
-                chat_id=m.from_user.id,
-                from_chat_id=chat_id,
-                message_id=msg_id
-            )
-            await asyncio.sleep(1)
+            try:
+                chat_id, msg_id = parse_post_link(link)
+                await app.copy_message(
+                    chat_id=m.from_user.id,
+                    from_chat_id=chat_id,
+                    message_id=msg_id
+                )
+                await asyncio.sleep(1)
+            except:
+                pass
         return
 
     # ADMIN HOME (NO JOIN CHECK)
@@ -90,7 +100,7 @@ async def start(_, m: Message):
         caption=(
             f"**🦊 Hello {m.from_user.mention}!**\n\n"
             "I'm an auto approve bot.\n"
-            "I approve users in Groups / Channels.\n\n"
+            "I handle join requests & DM users.\n\n"
             "📢 Broadcast : /bcast\n"
             "📊 Users : /users\n\n"
             "__Powered By : @teacher_slex__"
@@ -129,7 +139,7 @@ async def auto_delete_illegal(_, m: Message):
             content = m.caption.lower()
 
         for word in cfg.ILLEGAL_WORDS:
-            if word in content:
+            if word.lower() in content:
                 await asyncio.sleep(0.1)
                 await m.delete()
                 return
