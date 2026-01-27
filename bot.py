@@ -23,28 +23,41 @@ def parse_post_link(link: str):
     msg_id = int(parts[-1])
     return chat, msg_id
 
-#━━━━━━━━━━━━━━━━━━━━ JOIN REQUEST (NO APPROVE, ONLY DM) ━━━━━━━━━━━━━━━━━━━━
-# use this if you want clickable mention; requires parse_mode="markdown"
+#━━━━━━━━━━━━━━━━━━━━ JOIN REQUEST (NO APPROVE FOR CHANNELS, ONLY DM) ━━━━━━━━━━━━━━━━━━━━
 @app.on_chat_join_request(filters.group | filters.channel)
 async def approve(_, m: Message):
-    op = m.chat
-    kk = m.from_user
+    op = m.chat           # the chat (group/channel) where request came
+    kk = m.from_user      # the user who requested
     try:
         add_group(op.id)
-        await app.approve_chat_join_request(op.id, kk.id)
 
+        # prepare mention + welcome text (same format as before)
         mention = kk.mention  # e.g. [Name](tg://user?id=...)
         welcome = (
             f"👋 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {mention}\n\n"
-            "𝗬𝗼𝘂𝗿 𝗷𝗼𝗶𝗻 𝗿𝗲𝗾𝘂𝗲𝘀𝘁 𝗵𝗮𝘀 𝗯𝗲𝗲𝗻 𝗿𝗲𝗰𝗲𝗶𝘃𝗲𝗱 𝘀𝘂𝗰𝗰𝗲𝗳𝘂𝗹𝗹𝘆.\n\n"
+            "𝗬𝗼𝘂𝗿 𝗷𝗼𝗶𝗻 𝗿𝗲𝗾𝘂𝗲𝘀𝘁 𝗵𝗮𝘀 𝗯𝗲𝗲𝗻 𝗿𝗲𝗰𝗲𝗶𝘃𝗲𝗱 𝘀𝘂𝗰𝗰𝗲𝘀𝗳𝘂𝗹𝗹𝘆.\n\n"
             "⏳ 𝗣𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁 𝘄𝗵𝗶𝗹𝗲 𝗼𝘂𝗿 𝗮𝗱𝗺𝗶𝗻 𝗿𝗲𝘃𝗶𝗲𝘄𝘀 𝗮𝗻𝗱 𝗮𝗽𝗿𝗼𝘃𝗲𝘀 𝘆𝗼𝘂𝗿 𝗿𝗲𝗾𝘂𝗲𝘀𝘁.\n\n"
             "🤑 𝗔𝗽𝗸𝗮 𝘃𝗶𝗽 𝗻𝘂𝗺𝗯𝗲𝗿 𝗽𝗮𝗻3𝗹 𝗻𝗶𝗰𝗵𝗲 𝗱𝗶𝗬𝗲 𝗴𝗮𝘆𝗲 𝗵𝗮𝗶𝗻 — 𝗨𝘀𝗲 𝗸𝗮𝗿𝗻𝗲 𝗸𝗲 𝗹𝗶𝗲 𝘀𝗲𝘁𝘂𝗽 𝘃𝗶𝗱𝗲𝗼 𝗱𝗵𝘆𝗮𝗮𝗻 𝘀𝗲 𝗱𝗲𝗸𝗵𝗲𝗶𝗻."
         )
-        await app.send_message(kk.id, welcome, parse_mode="markdown")
 
-        add_user(kk.id)
-    except errors.PeerIdInvalid:
-        print("user isn't start bot(means group)")
+        # Approve only if it's a group/supergroup (not for channels)
+        try:
+            if getattr(op, "type", "") in ("group", "supergroup"):
+                await app.approve_chat_join_request(op.id, kk.id)
+        except Exception as e:
+            # approval might fail if bot isn't admin etc. just log it
+            print("approve error:", e)
+
+        # Send DM to user (keep same format). If user didn't start bot, PeerIdInvalid will be raised.
+        try:
+            await app.send_message(kk.id, welcome, parse_mode="markdown")
+            add_user(kk.id)
+        except errors.PeerIdInvalid:
+            # user hasn't started the bot — can't DM. Just log and continue.
+            print("user hasn't started bot (cannot send DM).")
+        except FloodWait as e:
+            await asyncio.sleep(e.value)
+
     except FloodWait as e:
         await asyncio.sleep(e.value)
     except Exception as err:
