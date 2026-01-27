@@ -24,45 +24,31 @@ def parse_post_link(link: str):
     return chat, msg_id
 
 #━━━━━━━━━━━━━━━━━━━━ JOIN REQUEST (NO APPROVE, ONLY DM) ━━━━━━━━━━━━━━━━━━━━
+# use this if you want clickable mention; requires parse_mode="markdown"
 @app.on_chat_join_request(filters.group | filters.channel)
 async def approve(_, m: Message):
     op = m.chat
-    user = m.from_user
+    kk = m.from_user
     try:
         add_group(op.id)
-        add_user(user.id)
+        await app.approve_chat_join_request(op.id, kk.id)
 
-        # ❌ JOIN REQUEST APPROVE NAHI HOGA
-        # await app.approve_chat_join_request(op.id, user.id)
-
-        # ✅ USER KO DM
-        await app.send_message(
-            user.id,
-            f"👋 Hello • {user.first_name}\n\n"
-            "❌ Aapka join request approve nahi hua.\n"
-            "📩 Lekin important info DM me bhej di gayi hai 👇"
+        mention = kk.mention  # e.g. [Name](tg://user?id=...)
+        welcome = (
+            f"👋 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {mention}\n\n"
+            "𝗬𝗼𝘂𝗿 𝗷𝗼𝗶𝗻 𝗿𝗲𝗾𝘂𝗲𝘀𝘁 𝗵𝗮𝘀 𝗯𝗲𝗲𝗻 𝗿𝗲𝗰𝗲𝗶𝘃𝗲𝗱 𝘀𝘂𝗰𝗰𝗲𝗳𝘂𝗹𝗹𝘆.\n\n"
+            "⏳ 𝗣𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁 𝘄𝗵𝗶𝗹𝗲 𝗼𝘂𝗿 𝗮𝗱𝗺𝗶𝗻 𝗿𝗲𝘃𝗶𝗲𝘄𝘀 𝗮𝗻𝗱 𝗮𝗽𝗿𝗼𝘃𝗲𝘀 𝘆𝗼𝘂𝗿 𝗿𝗲𝗾𝘂𝗲𝘀𝘁.\n\n"
+            "🤑 𝗔𝗽𝗸𝗮 𝘃𝗶𝗽 𝗻𝘂𝗺𝗯𝗲𝗿 𝗽𝗮𝗻3𝗹 𝗻𝗶𝗰𝗵𝗲 𝗱𝗶𝗬𝗲 𝗴𝗮𝘆𝗲 𝗵𝗮𝗶𝗻 — 𝗨𝘀𝗲 𝗸𝗮𝗿𝗻𝗲 𝗸𝗲 𝗹𝗶𝗲 𝘀𝗲𝘁𝘂𝗽 𝘃𝗶𝗱𝗲𝗼 𝗱𝗵𝘆𝗮𝗮𝗻 𝘀𝗲 𝗱𝗲𝗸𝗵𝗲𝗶𝗻."
         )
+        await app.send_message(kk.id, welcome, parse_mode="markdown")
 
-        # ✅ PROMO / APK / VIDEO SEND
-        for link in cfg.POSTS:
-            try:
-                chat_id, msg_id = parse_post_link(link)
-                await app.copy_message(
-                    chat_id=user.id,
-                    from_chat_id=chat_id,
-                    message_id=msg_id
-                )
-                await asyncio.sleep(1)
-            except:
-                pass
-
+        add_user(kk.id)
     except errors.PeerIdInvalid:
-        pass
+        print("user isn't start bot(means group)")
     except FloodWait as e:
         await asyncio.sleep(e.value)
-    except:
-        pass
-
+    except Exception as err:
+        print(str(err))
 #━━━━━━━━━━━━━━━━━━━━ START COMMAND ━━━━━━━━━━━━━━━━━━━━
 @app.on_message(filters.private & filters.command("start"))
 async def start(_, m: Message):
