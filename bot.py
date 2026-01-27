@@ -38,14 +38,13 @@ async def approve(_, m: Message):
         # ✅ USER KO DM
         await app.send_message(
     user.id,
-    f"> 👋 **Welcome • {user.first_name}**\n"
-    f">\n"
-    f"> Your join request has been received successfully.\n"
-    f">\n"
-    f"> ⏳ Please wait while our admin reviews and approves your request.\n"
-    f">\n"
-    f"> 🤑 Apka VIP number panel niche diye gaye hain,\n"
-    f"> use karne ke liye setup video dhyaan se dekhein.",
+    f"```"
+    f"👋 Welcome • {user.first_name}\n\n"
+    f"Your join request has been received successfully.\n\n"
+    f"⏳ Please wait while our admin reviews and approves your request.\n\n"
+    f"🤑 Apka VIP number panel niche diye gaye hain\n"
+    f"use karne ke liye setup video dhyaan se dekhein."
+    f"```",
     parse_mode="markdown"
         )
 
