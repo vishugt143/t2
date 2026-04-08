@@ -1,421 +1,224 @@
-# Don't Remove Credit @teacher_slex
-# Subscribe YouTube ƈɦǟռռɛʟ For Amazing Bot @Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+# ============================================
+# TELEGRAM REACTION BOT SYSTEM - PYTHON EDITION
+# Deploy on Render.com
+# ============================================
 
-from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram import filters, Client, errors
-from pyrogram.errors.exceptions.flood_420 import FloodWait
-from database import add_user, add_group, all_users, all_groups, users
-from configs import cfg
 import asyncio
+import time
+import random
+from fastapi import FastAPI, Request, Header, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+import httpx
 
-app = Client(
-    "approver",
-    api_id=cfg.API_ID,
-    api_hash=cfg.API_HASH,
-    bot_token=cfg.BOT_TOKEN
+# 👇 YAHAN APNI CONFIG DAALO 👇
+CONFIG = {
+    "FIREBASE_URL": "https://rxn-bot-default-rtdb.asia-southeast1.firebasedatabase.app", # Apna Firebase URL daalo
+    "FIREBASE_SECRET": "YOUR_FIREBASE_SECRET",                # Apna Database Secret daalo
+    "ADMIN_SECRET": "8787",                                   # Panel aur Webhook ka password
+    "TELEGRAM_API_BASE": "https://api.telegram.org/bot"
+}
+# 👆 BAS ITNA HI CHANGE KARNA HAI 👆
+
+app = FastAPI(title="ReactCore Python Backend")
+
+# Allow Panel to communicate (CORS)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-#━━━━━━━━━━━━━━━━━━━━ HELPER ━━━━━━━━━━━━━━━━━━━━
-def parse_post_link(link: str):
-    parts = link.split("/")
-    chat = parts[-2]
-    msg_id = int(parts[-1])
-    return chat, msg_id
+# --- 1. FIREBASE SERVICE ---
+class FirebaseService:
+    @staticmethod
+    async def get_database():
+        url = f"{CONFIG['FIREBASE_URL']}/campaigns.json?auth={CONFIG['FIREBASE_SECRET']}"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            return response.json() or {}
 
-#━━━━━━━━━━━━━━━━━━━━ JOIN REQUEST (NO APPROVE, ONLY DM) ━━━━━━━━━━━━━━━━━━━━
-@app.on_chat_join_request(filters.group | filters.channel)
-async def approve(_, m: Message):
-    op = m.chat
-    user = m.from_user
-    try:
-        add_group(op.id)
-        add_user(user.id)
+    @staticmethod
+    async def save_campaign(campaign_id: str, data: dict):
+        url = f"{CONFIG['FIREBASE_URL']}/campaigns/{campaign_id}.json?auth={CONFIG['FIREBASE_SECRET']}"
+        async with httpx.AsyncClient() as client:
+            await client.put(url, json=data)
 
-        # ❌ JOIN REQUEST APPROVE NAHI HOGA
-        # await app.approve_chat_join_request(op.id, user.id)
+    @staticmethod
+    async def update_campaign(campaign_id: str, data: dict):
+        url = f"{CONFIG['FIREBASE_URL']}/campaigns/{campaign_id}.json?auth={CONFIG['FIREBASE_SECRET']}"
+        async with httpx.AsyncClient() as client:
+            await client.patch(url, json=data)
 
-        # ✅ USER KO DM
-        await app.send_message(
-            user.id,
-            f"👋 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 • {user.first_name}\n\n"
-            "𝗬𝗼𝘂𝗿 𝗷𝗼𝗶𝗻 𝗿𝗲𝗾𝘂𝗲𝘀𝘁 𝗵𝗮𝘀 𝗯𝗲𝗲𝗻 𝗿𝗲𝗰𝗲𝗶𝘃𝗲𝗱 𝘀𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹𝗹𝘆.\n\n"
-            "⏳ 𝗣𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁 𝘄𝗵𝗶𝗹𝗲 𝗼𝘂𝗿 𝗮𝗱𝗺𝗶𝗻 𝗿𝗲𝘃𝗶𝗲𝘄𝘀 𝗮𝗻𝗱 𝗮𝗽𝗿𝗼𝘃𝗲𝘀 𝘆𝗼𝘂𝗿 𝗿𝗲𝗾𝘂𝗲𝘀𝘁.\n\n🤑 𝗔𝗽𝗸𝗮 𝘃𝗶𝗽 𝗻𝘂𝗺𝗯𝗲𝗿 𝗽𝗮𝗻𝟯𝗹 𝗻𝗶𝗰𝗵𝗲 𝗱𝗶𝘆𝗲 𝗴𝗮𝘆𝗲 𝗵𝗮𝗶𝗻 𝘂𝘀𝗲 𝗸𝗮𝗿𝗻𝗲 𝗸𝗲 𝗹𝗶𝘆𝗲 𝘀𝗲𝘁𝘂𝗽 𝘃𝗶𝗱𝗲𝗼 𝗱𝗵𝘆𝗮𝗮𝗻 𝘀𝗲 𝗱𝗲𝗸𝗵𝗲𝗶𝗻. "
-        )
+    @staticmethod
+    async def delete_campaign(campaign_id: str):
+        url = f"{CONFIG['FIREBASE_URL']}/campaigns/{campaign_id}.json?auth={CONFIG['FIREBASE_SECRET']}"
+        async with httpx.AsyncClient() as client:
+            await client.delete(url)
 
-        # ✅ PROMO / APK / VIDEO SEND
-        for link in cfg.POSTS:
-            try:
-                chat_id, msg_id = parse_post_link(link)
-                await app.copy_message(
-                    chat_id=user.id,
-                    from_chat_id=chat_id,
-                    message_id=msg_id
-                )
-                await asyncio.sleep(1)
-            except:
-                pass
-
-    except errors.PeerIdInvalid:
-        pass
-    except FloodWait as e:
-        await asyncio.sleep(e.value)
-    except:
-        pass
-
-#━━━━━━━━━━━━━━━━━━━━ START COMMAND ━━━━━━━━━━━━━━━━━━━━
-@app.on_message(filters.private & filters.command("start"))
-async def start(_, m: Message):
-    add_user(m.from_user.id)
-
-    # NORMAL USER
-    if m.from_user.id not in cfg.SUDO:
-        await m.reply_text(
-            "𝐁𝐇𝐀𝐈 𝐇𝐀𝐂𝐊 𝐒𝐄 𝐏𝐋𝐀𝐘 𝐊𝐑𝐎\n\n💸𝐏𝐑𝐎𝐅𝐈𝐓 𝐊𝐑𝐎🍻"
-        )
-
-        for link in cfg.POSTS:
-            try:
-                chat_id, msg_id = parse_post_link(link)
-                await app.copy_message(
-                    chat_id=m.from_user.id,
-                    from_chat_id=chat_id,
-                    message_id=msg_id
-                )
-                await asyncio.sleep(1)
-            except:
-                pass
-        return
-
-    # ADMIN HOME (NO JOIN CHECK)
-    keyboard = InlineKeyboardMarkup(
-        [[
-            InlineKeyboardButton("🗯 ƈɦǟռռɛʟ", url="https://t.me/lnx_store"),
-            InlineKeyboardButton("💬 Support", url="https://t.me/teacher_slex")
-        ]]
-    )
-
-    await m.reply_photo(
-        photo="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhsaR6kRdTPF2ZMEgmgSYjjXU6OcsJhkBe1EWtI1nfbOziINTYzxjlGCMSVh-KoH05Z8MpRWhVV9TIX_ykpjdeGqJ1atXy1TUqrVkohUxlykoZyl67EfMQppHoWYrdHmdi6FMcL9v-Vew2VtaWHWY_eGZt-GN057jLGvYj7UV49g0rXVxoDFXQAYxvaX1xP/s1280/75447.jpg",
-        caption=(
-            f"**🦊 Hello {m.from_user.mention}!**\n\n"
-            "I'm an auto approve bot.\n"
-            "I handle join requests & DM users.\n\n"
-            "📢 Broadcast : /bcast\n"
-            "📊 Users : /users\n\n"
-            "__Powered By : @teacher_slex__"
-        ),
-        reply_markup=keyboard
-    )
-
-#━━━━━━━━━━━━━━━━━━━━ USERS COUNT ━━━━━━━━━━━━━━━━━━━━
-@app.on_message(filters.command("users") & filters.user(cfg.SUDO))
-async def users_count(_, m: Message):
-    u = all_users()
-    g = all_groups()
-    await m.reply_text(f"🙋 Users : `{u}`\n👥 Groups : `{g}`\n📊 Total : `{u+g}`")
-
-#━━━━━━━━━━━━━━━━━━━━ BROADCAST COPY ━━━━━━━━━━━━━━━━━━━━
-@app.on_message(filters.command("bcast") & filters.user(cfg.SUDO))
-async def bcast(_, m: Message):
-    status = await m.reply("⚡ Broadcasting...")
-    ok = fail = 0
-    for u in users.find():
+# --- 2. TELEGRAM SERVICE ---
+class TelegramBotService:
+    @staticmethod
+    async def make_request(bot_token: str, method: str, params: dict):
+        url = f"{CONFIG['TELEGRAM_API_BASE']}{bot_token}/{method}"
         try:
-            await m.reply_to_message.copy(u["user_id"])
-            ok += 1
-        except:
-            fail += 1
-    await status.edit(f"✅ {ok} | ❌ {fail}")
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=params)
+                return response.json()
+        except Exception:
+            return {"ok": False}
 
-#━━━━━━━━━━━━━━━━━━━━ 🚫 AUTO DELETE ILLEGAL BOT MSG ━━━━━━━━━━━━━━━━━━━━
-@app.on_message(filters.me)
-async def auto_delete_illegal(_, m: Message):
-    try:
-        content = ""
-        if m.text:
-            content = m.text.lower()
-        elif m.caption:
-            content = m.caption.lower()
+    @staticmethod
+    async def set_reaction(bot_token: str, chat_id: str, message_id: int, reaction: str):
+        return await TelegramBotService.make_request(bot_token, 'setMessageReaction', {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "reaction": [{"type": "emoji", "emoji": reaction}]
+        })
 
-        for word in cfg.ILLEGAL_WORDS:
-            if word.lower() in content:
-                await asyncio.sleep(0.1)
-                await m.delete()
-                return
-    except:
-        pass
+    @staticmethod
+    async def add_view(bot_token: str, chat_id: str, message_id: int):
+        bot_id = bot_token.split(":")[0]
+        return await TelegramBotService.make_request(bot_token, 'forwardMessage', {
+            "chat_id": bot_id,
+            "from_chat_id": chat_id,
+            "message_id": message_id
+        })
 
-print("🤖 Bot is Alive!")
-app.run()# Don't Remove Credit @teacher_slex
-# Subscribe YouTube ƈɦǟռռɛʟ For Amazing Bot @Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+    @staticmethod
+    async def set_webhook(bot_token: str, url: str):
+        return await TelegramBotService.make_request(bot_token, 'setWebhook', {
+            "url": url,
+            "secret_token": CONFIG['ADMIN_SECRET']
+        })
 
-from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram import filters, Client, errors
-from pyrogram.errors.exceptions.flood_420 import FloodWait
-from database import add_user, add_group, all_users, all_groups, users
-from configs import cfg
-import asyncio
+    @staticmethod
+    async def delete_webhook(bot_token: str):
+        return await TelegramBotService.make_request(bot_token, 'deleteWebhook', {})
 
-app = Client(
-    "approver",
-    api_id=cfg.API_ID,
-    api_hash=cfg.API_HASH,
-    bot_token=cfg.BOT_TOKEN
-)
+# --- 3. BACKGROUND TASKS (Logic for Webhook & Expiry) ---
+async def process_post_reactions(campaign_id: str, post: dict):
+    """Background task to handle reactions without blocking Telegram"""
+    db = await FirebaseService.get_database()
+    campaign = db.get(campaign_id)
+    
+    if campaign and campaign.get('status') == 'active' and campaign.get('reactions'):
+        reactions_pool = campaign['reactions']
+        chat_id = campaign['channel_id']
+        msg_id = post['message_id']
+        
+        tasks = []
+        
+        # 1. Master Bot Action
+        master_reaction = random.choice(reactions_pool).strip()
+        tasks.append(TelegramBotService.set_reaction(campaign['bot_token'], chat_id, msg_id, master_reaction))
+        
+        # 2. Swarm Mode Actions (Secondary Bots)
+        if campaign.get('type') == 'multi' and campaign.get('session_strings'):
+            for token in campaign['session_strings']:
+                token = token.strip()
+                if ":" in token: # Validating simple bot token format
+                    random_reaction = random.choice(reactions_pool).strip()
+                    tasks.append(TelegramBotService.set_reaction(token, chat_id, msg_id, random_reaction))
+        
+        # Execute all bots at the exact same time
+        await asyncio.gather(*tasks)
 
-#━━━━━━━━━━━━━━━━━━━━ HELPER ━━━━━━━━━━━━━━━━━━━━
-def parse_post_link(link: str):
-    parts = link.split("/")
-    chat = parts[-2]
-    msg_id = int(parts[-1])
-    return chat, msg_id
+        # 3. View Boost
+        if campaign.get('view_mode'):
+            await TelegramBotService.add_view(campaign['bot_token'], chat_id, msg_id)
 
-#━━━━━━━━━━━━━━━━━━━━ JOIN REQUEST (NO APPROVE, ONLY DM) ━━━━━━━━━━━━━━━━━━━━
-# use this if you want clickable mention; requires parse_mode="markdown"
-@app.on_chat_join_request(filters.group | filters.channel)
-async def approve(_, m: Message):
-    op = m.chat
-    kk = m.from_user
-    try:
-        add_group(op.id)
-        await app.approve_chat_join_request(op.id, kk.id)
-
-        mention = kk.mention  # e.g. [Name](tg://user?id=...)
-        welcome = (
-            f"👋 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {mention}\n\n"
-            "𝗬𝗼𝘂𝗿 𝗷𝗼𝗶𝗻 𝗿𝗲𝗾𝘂𝗲𝘀𝘁 𝗵𝗮𝘀 𝗯𝗲𝗲𝗻 𝗿𝗲𝗰𝗲𝗶𝘃𝗲𝗱 𝘀𝘂𝗰𝗰𝗲𝗳𝘂𝗹𝗹𝘆.\n\n"
-            "⏳ 𝗣𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁 𝘄𝗵𝗶𝗹𝗲 𝗼𝘂𝗿 𝗮𝗱𝗺𝗶𝗻 𝗿𝗲𝘃𝗶𝗲𝘄𝘀 𝗮𝗻𝗱 𝗮𝗽𝗿𝗼𝘃𝗲𝘀 𝘆𝗼𝘂𝗿 𝗿𝗲𝗾𝘂𝗲𝘀𝘁.\n\n"
-            "🤑 𝗔𝗽𝗸𝗮 𝘃𝗶𝗽 𝗻𝘂𝗺𝗯𝗲𝗿 𝗽𝗮𝗻3𝗹 𝗻𝗶𝗰𝗵𝗲 𝗱𝗶𝗬𝗲 𝗴𝗮𝘆𝗲 𝗵𝗮𝗶𝗻 — 𝗨𝘀𝗲 𝗸𝗮𝗿𝗻𝗲 𝗸𝗲 𝗹𝗶𝗲 𝘀𝗲𝘁𝘂𝗽 𝘃𝗶𝗱𝗲𝗼 𝗱𝗵𝘆𝗮𝗮𝗻 𝘀𝗲 𝗱𝗲𝗸𝗵𝗲𝗶𝗻."
-        )
-        await app.send_message(kk.id, welcome, parse_mode="markdown")
-
-        add_user(kk.id)
-    except errors.PeerIdInvalid:
-        print("user isn't start bot(means group)")
-    except FloodWait as e:
-        await asyncio.sleep(e.value)
-    except Exception as err:
-        print(str(err))
-#━━━━━━━━━━━━━━━━━━━━ START COMMAND ━━━━━━━━━━━━━━━━━━━━
-@app.on_message(filters.private & filters.command("start"))
-async def start(_, m: Message):
-    add_user(m.from_user.id)
-
-    # NORMAL USER
-    if m.from_user.id not in cfg.SUDO:
-        await m.reply_text(
-            "𝐁𝐇𝐀𝐈 𝐇𝐀𝐂𝐊 𝐒𝐄 𝐏𝐋𝐀𝐘 𝐊𝐑𝐎\n\n💸𝐏𝐑𝐎𝐅𝐈𝐓 𝐊𝐑𝐎🍻"
-        )
-
-        for link in cfg.POSTS:
-            try:
-                chat_id, msg_id = parse_post_link(link)
-                await app.copy_message(
-                    chat_id=m.from_user.id,
-                    from_chat_id=chat_id,
-                    message_id=msg_id
-                )
-                await asyncio.sleep(1)
-            except:
-                pass
-        return
-
-    # ADMIN HOME (NO JOIN CHECK)
-    keyboard = InlineKeyboardMarkup(
-        [[
-            InlineKeyboardButton("🗯 ƈɦǟռռɛʟ", url="https://t.me/lnx_store"),
-            InlineKeyboardButton("💬 Support", url="https://t.me/teacher_slex")
-        ]]
-    )
-
-    await m.reply_photo(
-        photo="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhsaR6kRdTPF2ZMEgmgSYjjXU6OcsJhkBe1EWtI1nfbOziINTYzxjlGCMSVh-KoH05Z8MpRWhVV9TIX_ykpjdeGqJ1atXy1TUqrVkohUxlykoZyl67EfMQppHoWYrdHmdi6FMcL9v-Vew2VtaWHWY_eGZt-GN057jLGvYj7UV49g0rXVxoDFXQAYxvaX1xP/s1280/75447.jpg",
-        caption=(
-            f"**🦊 Hello {m.from_user.mention}!**\n\n"
-            "I'm an auto approve bot.\n"
-            "I handle join requests & DM users.\n\n"
-            "📢 Broadcast : /bcast\n"
-            "📊 Users : /users\n\n"
-            "__Powered By : @teacher_slex__"
-        ),
-        reply_markup=keyboard
-    )
-
-#━━━━━━━━━━━━━━━━━━━━ USERS COUNT ━━━━━━━━━━━━━━━━━━━━
-@app.on_message(filters.command("users") & filters.user(cfg.SUDO))
-async def users_count(_, m: Message):
-    u = all_users()
-    g = all_groups()
-    await m.reply_text(f"🙋 Users : `{u}`\n👥 Groups : `{g}`\n📊 Total : `{u+g}`")
-
-#━━━━━━━━━━━━━━━━━━━━ BROADCAST COPY ━━━━━━━━━━━━━━━━━━━━
-@app.on_message(filters.command("bcast") & filters.user(cfg.SUDO))
-async def bcast(_, m: Message):
-    status = await m.reply("⚡ Broadcasting...")
-    ok = fail = 0
-    for u in users.find():
+async def check_expired_campaigns():
+    """Background loop that runs continuously to auto-expire bots"""
+    while True:
         try:
-            await m.reply_to_message.copy(u["user_id"])
-            ok += 1
-        except:
-            fail += 1
-    await status.edit(f"✅ {ok} | ❌ {fail}")
+            db = await FirebaseService.get_database()
+            now = int(time.time() * 1000)
+            
+            for cid, campaign in db.items():
+                if campaign.get('status') == 'active' and campaign.get('expiry') and now > campaign['expiry']:
+                    await FirebaseService.update_campaign(cid, {"status": "expired"})
+                    if campaign.get('bot_token'):
+                        await TelegramBotService.delete_webhook(campaign['bot_token'])
+        except Exception as e:
+            print(f"Cron Error: {e}")
+            
+        await asyncio.sleep(60) # Check every 60 seconds
 
-#━━━━━━━━━━━━━━━━━━━━ 🚫 AUTO DELETE ILLEGAL BOT MSG ━━━━━━━━━━━━━━━━━━━━
-@app.on_message(filters.me)
-async def auto_delete_illegal(_, m: Message):
-    try:
-        content = ""
-        if m.text:
-            content = m.text.lower()
-        elif m.caption:
-            content = m.caption.lower()
+@app.on_event("startup")
+async def startup_event():
+    # Start the background expiry checker when server starts
+    asyncio.create_task(check_expired_campaigns())
 
-        for word in cfg.ILLEGAL_WORDS:
-            if word.lower() in content:
-                await asyncio.sleep(0.1)
-                await m.delete()
-                return
-    except:
-        pass
+# --- 4. API ENDPOINTS (Connects with PHP Panel) ---
 
-print("🤖 Bot is Alive!")
-app.run()
-# Don't Remove Credit @teacher_slex
-# Subscribe YouTube ƈɦǟռռɛʟ For Amazing Bot @Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+@app.post("/webhook/{campaign_id}")
+async def webhook(campaign_id: str, request: Request, background_tasks: BackgroundTasks, x_telegram_bot_api_secret_token: str = Header(None)):
+    if x_telegram_bot_api_secret_token != CONFIG["ADMIN_SECRET"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    update = await request.json()
+    if "channel_post" in update:
+        # Hand off the heavy lifting to the background task instantly
+        background_tasks.add_task(process_post_reactions, campaign_id, update["channel_post"])
+    
+    return {"status": "OK"}
 
-from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram import filters, Client, errors
-from pyrogram.errors.exceptions.flood_420 import FloodWait
-from database import add_user, add_group, all_users, all_groups, users
-from configs import cfg
-import asyncio
+@app.get("/api/campaigns")
+async def get_campaigns():
+    data = await FirebaseService.get_database()
+    return {"campaigns": data}
 
-app = Client(
-    "approver",
-    api_id=cfg.API_ID,
-    api_hash=cfg.API_HASH,
-    bot_token=cfg.BOT_TOKEN
-)
+@app.post("/api/campaigns")
+async def create_campaign(request: Request, x_admin_secret: str = Header(None)):
+    if x_admin_secret != CONFIG["ADMIN_SECRET"]:
+        raise HTTPException(status_code=401)
+    
+    body = await request.json()
+    campaign_id = f"camp_{int(time.time() * 1000)}"
+    body["status"] = "active"
+    
+    await FirebaseService.save_campaign(campaign_id, body)
+    
+    # Set webhook using Render's URL
+    base_url = str(request.base_url).rstrip("/")
+    await TelegramBotService.set_webhook(body["bot_token"], f"{base_url}/webhook/{campaign_id}")
+    
+    return {"success": True, "id": campaign_id}
 
-#━━━━━━━━━━━━━━━━━━━━ HELPER ━━━━━━━━━━━━━━━━━━━━
-def parse_post_link(link: str):
-    parts = link.split("/")
-    chat = parts[-2]
-    msg_id = int(parts[-1])
-    return chat, msg_id
+@app.put("/api/campaigns/{campaign_id}")
+async def edit_campaign(campaign_id: str, request: Request, x_admin_secret: str = Header(None)):
+    if x_admin_secret != CONFIG["ADMIN_SECRET"]:
+        raise HTTPException(status_code=401)
+    
+    body = await request.json()
+    await FirebaseService.update_campaign(campaign_id, body)
+    
+    if body.get("bot_token"):
+        base_url = str(request.base_url).rstrip("/")
+        await TelegramBotService.set_webhook(body["bot_token"], f"{base_url}/webhook/{campaign_id}")
+        
+    return {"success": True}
 
-#━━━━━━━━━━━━━━━━━━━━ JOIN REQUEST (NO APPROVE, ONLY DM) ━━━━━━━━━━━━━━━━━━━━
-# use this if you want clickable mention; requires parse_mode="markdown"
-@app.on_chat_join_request(filters.group | filters.channel)
-async def approve(_, m: Message):
-    op = m.chat
-    kk = m.from_user
-    try:
-        add_group(op.id)
-        await app.approve_chat_join_request(op.id, kk.id)
+@app.delete("/api/campaigns/{campaign_id}")
+async def delete_campaign(campaign_id: str, x_admin_secret: str = Header(None)):
+    if x_admin_secret != CONFIG["ADMIN_SECRET"]:
+        raise HTTPException(status_code=401)
+    
+    db = await FirebaseService.get_database()
+    campaign = db.get(campaign_id)
+    if campaign and campaign.get("bot_token"):
+        await TelegramBotService.delete_webhook(campaign["bot_token"])
+        
+    await FirebaseService.delete_campaign(campaign_id)
+    return {"success": True}
 
-        mention = kk.mention  # e.g. [Name](tg://user?id=...)
-        welcome = (
-            f"👋 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {mention}\n\n"
-            "𝗬𝗼𝘂𝗿 𝗷𝗼𝗶𝗻 𝗿𝗲𝗾𝘂𝗲𝘀𝘁 𝗵𝗮𝘀 𝗯𝗲𝗲𝗻 𝗿𝗲𝗰𝗲𝗶𝘃𝗲𝗱 𝘀𝘂𝗰𝗰𝗲𝗳𝘂𝗹𝗹𝘆.\n\n"
-            "⏳ 𝗣𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁 𝘄𝗵𝗶𝗹𝗲 𝗼𝘂𝗿 𝗮𝗱𝗺𝗶𝗻 𝗿𝗲𝘃𝗶𝗲𝘄𝘀 𝗮𝗻𝗱 𝗮𝗽𝗿𝗼𝘃𝗲𝘀 𝘆𝗼𝘂𝗿 𝗿𝗲𝗾𝘂𝗲𝘀𝘁.\n\n"
-            "🤑 𝗔𝗽𝗸𝗮 𝘃𝗶𝗽 𝗻𝘂𝗺𝗯𝗲𝗿 𝗽𝗮𝗻3𝗹 𝗻𝗶𝗰𝗵𝗲 𝗱𝗶𝗬𝗲 𝗴𝗮𝘆𝗲 𝗵𝗮𝗶𝗻 — 𝗨𝘀𝗲 𝗸𝗮𝗿𝗻𝗲 𝗸𝗲 𝗹𝗶𝗲 𝘀𝗲𝘁𝘂𝗽 𝘃𝗶𝗱𝗲𝗼 𝗱𝗵𝘆𝗮𝗮𝗻 𝘀𝗲 𝗱𝗲𝗸𝗵𝗲𝗶𝗻."
-        )
-        await app.send_message(kk.id, welcome, parse_mode="markdown")
+@app.get("/api/stats")
+async def get_stats():
+    data = await FirebaseService.get_database()
+    active = sum(1 for c in data.values() if c.get("status") == "active")
+    return {"stats": {"total": len(data), "active": active}}
 
-        add_user(kk.id)
-    except errors.PeerIdInvalid:
-        print("user isn't start bot(means group)")
-    except FloodWait as e:
-        await asyncio.sleep(e.value)
-    except Exception as err:
-        print(str(err))
-#━━━━━━━━━━━━━━━━━━━━ START COMMAND ━━━━━━━━━━━━━━━━━━━━
-@app.on_message(filters.private & filters.command("start"))
-async def start(_, m: Message):
-    add_user(m.from_user.id)
-
-    # NORMAL USER
-    if m.from_user.id not in cfg.SUDO:
-        await m.reply_text(
-            "𝐁𝐇𝐀𝐈 𝐇𝐀𝐂𝐊 𝐒𝐄 𝐏𝐋𝐀𝐘 𝐊𝐑𝐎\n\n💸𝐏𝐑𝐎𝐅𝐈𝐓 𝐊𝐑𝐎🍻"
-        )
-
-        for link in cfg.POSTS:
-            try:
-                chat_id, msg_id = parse_post_link(link)
-                await app.copy_message(
-                    chat_id=m.from_user.id,
-                    from_chat_id=chat_id,
-                    message_id=msg_id
-                )
-                await asyncio.sleep(1)
-            except:
-                pass
-        return
-
-    # ADMIN HOME (NO JOIN CHECK)
-    keyboard = InlineKeyboardMarkup(
-        [[
-            InlineKeyboardButton("🗯 ƈɦǟռռɛʟ", url="https://t.me/lnx_store"),
-            InlineKeyboardButton("💬 Support", url="https://t.me/teacher_slex")
-        ]]
-    )
-
-    await m.reply_photo(
-        photo="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhsaR6kRdTPF2ZMEgmgSYjjXU6OcsJhkBe1EWtI1nfbOziINTYzxjlGCMSVh-KoH05Z8MpRWhVV9TIX_ykpjdeGqJ1atXy1TUqrVkohUxlykoZyl67EfMQppHoWYrdHmdi6FMcL9v-Vew2VtaWHWY_eGZt-GN057jLGvYj7UV49g0rXVxoDFXQAYxvaX1xP/s1280/75447.jpg",
-        caption=(
-            f"**🦊 Hello {m.from_user.mention}!**\n\n"
-            "I'm an auto approve bot.\n"
-            "I handle join requests & DM users.\n\n"
-            "📢 Broadcast : /bcast\n"
-            "📊 Users : /users\n\n"
-            "__Powered By : @teacher_slex__"
-        ),
-        reply_markup=keyboard
-    )
-
-#━━━━━━━━━━━━━━━━━━━━ USERS COUNT ━━━━━━━━━━━━━━━━━━━━
-@app.on_message(filters.command("users") & filters.user(cfg.SUDO))
-async def users_count(_, m: Message):
-    u = all_users()
-    g = all_groups()
-    await m.reply_text(f"🙋 Users : `{u}`\n👥 Groups : `{g}`\n📊 Total : `{u+g}`")
-
-#━━━━━━━━━━━━━━━━━━━━ BROADCAST COPY ━━━━━━━━━━━━━━━━━━━━
-@app.on_message(filters.command("bcast") & filters.user(cfg.SUDO))
-async def bcast(_, m: Message):
-    status = await m.reply("⚡ Broadcasting...")
-    ok = fail = 0
-    for u in users.find():
-        try:
-            await m.reply_to_message.copy(u["user_id"])
-            ok += 1
-        except:
-            fail += 1
-    await status.edit(f"✅ {ok} | ❌ {fail}")
-
-#━━━━━━━━━━━━━━━━━━━━ 🚫 AUTO DELETE ILLEGAL BOT MSG ━━━━━━━━━━━━━━━━━━━━
-@app.on_message(filters.me)
-async def auto_delete_illegal(_, m: Message):
-    try:
-        content = ""
-        if m.text:
-            content = m.text.lower()
-        elif m.caption:
-            content = m.caption.lower()
-
-        for word in cfg.ILLEGAL_WORDS:
-            if word.lower() in content:
-                await asyncio.sleep(0.1)
-                await m.delete()
-                return
-    except:
-        pass
-
-print("🤖 Bot is Alive!")
-app.run()
+@app.get("/")
+def home():
+    return {"status": "Render Node Active", "framework": "FastAPI"}
